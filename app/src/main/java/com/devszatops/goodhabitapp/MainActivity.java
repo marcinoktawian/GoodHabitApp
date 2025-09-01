@@ -1,10 +1,12 @@
 package com.devszatops.goodhabitapp;
 
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.os.Bundle;
 import android.text.InputType;
 import android.widget.*;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
 import androidx.room.Room;
 
 import com.devszatops.goodhabitapp.data.AppDatabase;
@@ -25,6 +27,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         habitList = findViewById(R.id.habitList);
@@ -65,6 +68,13 @@ public class MainActivity extends AppCompatActivity {
 
         card.addView(text);
         habitList.addView(card, habitList.getChildCount() - 1);
+
+        card.setOnClickListener(v -> {
+            Intent intent = new Intent(this, HabitDetailActivity.class);
+            intent.putExtra("habitName", habit.name);
+            intent.putExtra("habitId", habit.id);
+            startActivity(intent);
+        });
 
         // DŁUGIE PRZYTRZYMANIE = USUWANIE
         card.setOnLongClickListener(v -> {
@@ -142,7 +152,7 @@ public class MainActivity extends AppCompatActivity {
                                 Toast.makeText(this, "Taki zwyczaj już istnieje!", Toast.LENGTH_SHORT).show()
                         );
                     } else {
-                        Habit habit = new Habit(formatted, System.currentTimeMillis(), 3);
+                        Habit habit = new Habit(formatted, System.currentTimeMillis(), 2);
                         long newId = db.habitDao().insertHabit(habit);
                         habit.id = (int) newId;
 

@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/white">
+
+    <!-- Baner tytułu -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:background="#4CAF50"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <!-- Strzałka wstecz -->
+        <ImageButton
+            android:id="@+id/backButton"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:padding="16dp"
+            android:src="@drawable/undo"
+            android:background="@android:color/transparent"
+            android:contentDescription="Cofnij"
+            android:tint="@android:color/white" />
+
+        <!-- Tytuł -->
+        <TextView
+            android:id="@+id/habitTitle"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:text="Zwyczaj"
+            android:textColor="@android:color/white"
+            android:textSize="18sp"
+            android:paddingStart="8dp"
+            android:textStyle="bold" />
+
+        <!-- Menu (3 kropki) -->
+        <ImageButton
+            android:id="@+id/menuButton"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:padding="16dp"
+            android:src="@drawable/more_vert"
+            android:background="@android:color/transparent"
+            android:contentDescription="Menu"
+            android:tint="@android:color/white" />
+    </LinearLayout>
+
+    <!-- Zawartość -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            android:id="@+id/contentLayout"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone">
+
+            <com.prolificinteractive.materialcalendarview.MaterialCalendarView
+                android:id="@+id/calendarView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:mcv_showOtherDates="all"
+                app:mcv_firstDayOfWeek="monday"
+                />
+
+            <!-- Wyświetlanie stricków -->
+            <LinearLayout
+                android:orientation="horizontal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:layout_marginTop="16dp">
+
+                <!-- Obecny streak po lewej -->
+                <LinearLayout
+                    android:orientation="vertical"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center_horizontal">
+
+                    <TextView
+                        android:id="@+id/currentStreakLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Obecny streak"
+                        android:textSize="14sp"
+                        android:textColor="#000000"
+                        android:gravity="center_horizontal"/>
+
+                    <TextView
+                        android:id="@+id/currentStreak"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0"
+                        android:textSize="24sp"
+                        android:textColor="#388E3C"
+                        android:gravity="center_horizontal"/>
+                </LinearLayout>
+
+                <!-- Najdłuższy streak po prawej -->
+                <LinearLayout
+                    android:orientation="vertical"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center_horizontal">
+
+                    <TextView
+                        android:id="@+id/longestStreakLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Najdłuższy streak"
+                        android:textSize="14sp"
+                        android:textColor="#000000"
+                        android:gravity="center_horizontal"/>
+
+                    <TextView
+                        android:id="@+id/longestStreak"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="0"
+                        android:textSize="24sp"
+                        android:textColor="#FF5722"
+                        android:gravity="center_horizontal"/>
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+
+        <ProgressBar
+            android:id="@+id/progressBar"
+            style="?android:attr/progressBarStyleLarge"
+            android:layout_gravity="center"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+    </FrameLayout>
+
+</LinearLayout>

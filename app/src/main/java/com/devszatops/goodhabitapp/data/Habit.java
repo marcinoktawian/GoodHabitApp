@@ -19,13 +19,13 @@ public class Habit {
 
     public int maxStreak;
 
-    public int allowedSkips;
+    public int allowedSkipDays;
 
-    public Habit(@NonNull String name, long createdAt, int allowedSkips) {
+    public Habit(@NonNull String name, long createdAt, int allowedSkipDays) {
         this.name = name;
         this.createdAt = createdAt;
         this.currentStreak = 0;
         this.maxStreak = 0;
-        this.allowedSkips = allowedSkips;
+        this.allowedSkipDays = allowedSkipDays;
     }
 }
