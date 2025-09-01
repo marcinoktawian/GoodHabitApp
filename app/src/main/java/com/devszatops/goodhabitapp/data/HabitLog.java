@@ -10,4 +10,6 @@ public class HabitLog {
 
     public int habitId;
     public String date; // format: "2025-06-21"
+
+    public Boolean isBreak;
 }

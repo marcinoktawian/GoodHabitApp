@@ -36,8 +36,6 @@ public class MainActivity extends AppCompatActivity {
                         AppDatabase.class, "habit-db")
                 .fallbackToDestructiveMigration()
                 .build();
-        loadHabitsFromDatabase();
-        addAddButtonCard();
     }
 
 
@@ -97,7 +95,10 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-
+    protected void onResume() {
+        super.onResume();
+        loadHabitsFromDatabase(); // metoda pobierająca aktualne dane z bazy i odświeżająca RecyclerView/ListView
+    }
 
 
     private void addAddButtonCard() {
@@ -171,6 +172,7 @@ public class MainActivity extends AppCompatActivity {
 
 
     private void loadHabitsFromDatabase() {
+        habitList.removeAllViews();
         new Thread(() -> {
             if (db == null) {
                 runOnUiThread(() ->
@@ -186,7 +188,7 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
         }).start();
+        addAddButtonCard();
     }
-
 
 }

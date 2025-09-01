@@ -1,7 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/menu_edit_name"
+        android:title="Edytuj nazwę zwyczaju"
+        android:icon="@android:drawable/ic_menu_edit" />
+
+    <item
+        android:id="@+id/menu_edit_skip_days"
+        android:title="Zmień dozwoloną przerwę"
+        android:icon="@android:drawable/ic_menu_today" />
+
     <item
         android:id="@+id/menu_delete"
         android:title="Usuń zwyczaj"
         android:icon="@android:drawable/ic_menu_delete" />
+
 </menu>

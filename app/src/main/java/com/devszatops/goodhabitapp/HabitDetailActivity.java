@@ -6,12 +6,19 @@ import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.ShapeDrawable;
 import android.graphics.drawable.shapes.OvalShape;
 import android.os.Bundle;
+import android.text.InputType;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.View;
+import android.widget.ArrayAdapter;
+import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
+import android.widget.NumberPicker;
 import android.widget.PopupMenu;
 import android.widget.ProgressBar;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -85,8 +92,16 @@ public class HabitDetailActivity extends AppCompatActivity {
             popup.getMenuInflater().inflate(R.menu.habit_detail_menu, popup.getMenu());
 
             popup.setOnMenuItemClickListener(item -> {
-                if (item.getItemId() == R.id.menu_delete) {
-                    Toast.makeText(this, "Tu będzie usuwanie...", Toast.LENGTH_SHORT).show();
+                int id = item.getItemId();
+
+                if (id == R.id.menu_edit_name) {
+                    showEditNameDialog();
+                    return true;
+                } else if (id == R.id.menu_edit_skip_days) {
+                    showEditSkipDaysDialog();
+                    return true;
+                } else if (id == R.id.menu_delete) {
+                    showDeleteHabitDialog();
                     return true;
                 }
                 return false;
@@ -97,6 +112,100 @@ public class HabitDetailActivity extends AppCompatActivity {
 
         simulateLoadingData();
     }
+
+    private void showEditNameDialog() {
+        EditText input = new EditText(this);
+        input.setHint("Nowa nazwa");
+
+        new AlertDialog.Builder(this)
+                .setTitle("Edytuj nazwę zwyczaju")
+                .setView(input)
+                .setPositiveButton("Zapisz", (dialog, which) -> {
+                    String newName = input.getText().toString().trim();
+                    String formatted = newName.substring(0, 1).toUpperCase() + newName.substring(1).toLowerCase();
+                    if (!newName.isEmpty()) {
+                        new Thread(() -> {
+                            habitDao.updateName(habitId, formatted);
+                            runOnUiThread(this::refreshHabitData);
+                        }).start();
+                        Toast.makeText(this, "Nazwa zmieniona", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("Anuluj", null)
+                .show();
+    }
+
+    private void showEditSkipDaysDialog() {
+        new Thread(() -> {
+            // pobierz dane w tle
+            int currentSkipDays = getHabitAllowedSkipDays();
+
+            runOnUiThread(() -> {
+                // Dane do spinnera
+                Integer[] values = new Integer[31];
+                for (int i = 0; i <= 30; i++) values[i] = i;
+
+                Spinner spinner = new Spinner(this);
+                ArrayAdapter<Integer> adapter = new ArrayAdapter<>(this,
+                        android.R.layout.simple_spinner_dropdown_item, values);
+                spinner.setAdapter(adapter);
+                spinner.setSelection(currentSkipDays);
+
+                // Kontener do centrowania
+                FrameLayout container = new FrameLayout(this);
+
+                // LayoutParams z wrap_content
+                FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.WRAP_CONTENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT
+                );
+                params.gravity = Gravity.CENTER;
+                spinner.setLayoutParams(params);
+
+                // Dodajemy trochę paddingu poziomego – ok. szerokości zawartości
+                int padding = (int) (64 * getResources().getDisplayMetrics().density); // ~32dp po bokach
+                spinner.setPadding(padding, spinner.getPaddingTop(), padding, spinner.getPaddingBottom());
+
+                container.addView(spinner);
+                int outerPadding = (int) (32 * getResources().getDisplayMetrics().density);
+                container.setPadding(outerPadding, outerPadding, outerPadding, outerPadding);
+
+                new AlertDialog.Builder(this)
+                        .setTitle("Zmień dozwoloną przerwę")
+                        .setView(container)
+                        .setPositiveButton("Zapisz", (dialog, which) -> {
+                            int skipDays = (int) spinner.getSelectedItem();
+                            new Thread(() -> {
+                                habitDao.updateAllowedSkipDays(habitId, skipDays);
+                                runOnUiThread(this::refreshHabitData);
+                            }).start();
+                            Toast.makeText(this, "Dni przerwy zmienione na " + skipDays, Toast.LENGTH_SHORT).show();
+                        })
+                        .setNegativeButton("Anuluj", null)
+                        .show();
+            });
+        }).start();
+    }
+
+
+
+    private void showDeleteHabitDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("Usuń zwyczaj")
+                .setMessage("Na pewno chcesz usunąć ten zwyczaj?")
+                .setPositiveButton("Usuń", (dialog, which) -> {
+                    new Thread(() -> {
+                        habitDao.deleteHabitById(habitId); // musisz mieć metodę w DAO
+                    }).start();
+                    Toast.makeText(this, "Zwyczaj usunięty", Toast.LENGTH_SHORT).show();
+                    finish();
+                })
+                .setNegativeButton("Anuluj", null)
+                .show();
+    }
+
+
+
 
     private void simulateLoadingData() {
         new Thread(() -> {
@@ -113,6 +222,16 @@ public class HabitDetailActivity extends AppCompatActivity {
                 setupCalendar();
                 highlightSampleDates();
                 calculateStreaks();
+            });
+        }).start();
+    }
+
+    private void refreshHabitData() {
+        new Thread(() -> {
+            Habit habit = habitDao.getHabitById(habitId);
+            runOnUiThread(() -> {
+                title.setText(habit.name);
+                calculateStreaks(); // aktualizacja streaków
             });
         }).start();
     }
@@ -157,6 +276,7 @@ public class HabitDetailActivity extends AppCompatActivity {
                                 HabitLog habitLog = new HabitLog();
                                 habitLog.habitId = habitId;  // Ustawiamy habitId
                                 habitLog.date = dateStr;     // Ustawiamy datę
+                                habitLog.isBreak = Boolean.FALSE;     // Ustawiamy datę
 
                                 // Dodajemy log do bazy
                                 new Thread(() -> {
@@ -251,26 +371,6 @@ public class HabitDetailActivity extends AppCompatActivity {
         Log.d("HabitDetailActivity", "Date parsed: " + calendar.getTime()); // Debugging log for the parsed date
 
         return calendar;
-    }
-
-
-    private List<CalendarDay> getCompletedDaysFromDatabase() {
-        List<CalendarDay> completedDays = new ArrayList<>();
-        new Thread(() -> {
-            List<HabitLog> logs = habitLogDao.getLogsForHabit(habitId);
-            for (HabitLog log : logs) {
-                completedDays.add(CalendarDay.from(Integer.parseInt(log.date.split("-")[0]),
-                        Integer.parseInt(log.date.split("-")[1]) - 1,
-                        Integer.parseInt(log.date.split("-")[2])));
-            }
-        }).start();
-        return completedDays;
-    }
-
-    private List<CalendarDay> getMissedDaysFromDatabase() {
-        List<CalendarDay> missedDays = new ArrayList<>();
-        missedDays.add(CalendarDay.from(2025, 5, 21));  // Przykład
-        return missedDays;
     }
 
     public class DayColorDecorator implements DayViewDecorator {
@@ -417,16 +517,6 @@ public class HabitDetailActivity extends AppCompatActivity {
         return habit.allowedSkipDays;
     }
 
-    private void updateStreakInDatabase(int currentStreak, int longestStreak) {
-        // Zaktualizuj odpowiednie wartości w bazie danych
-        Habit habit = habitDao.getHabitById(habitId);
-        habit.currentStreak = currentStreak;
-        habit.maxStreak = longestStreak;
-
-        new Thread(() -> {
-            habitDao.updateHabit(habit);  // Zaktualizuj rekord w bazie
-        }).start();
-    }
 
     private void updateUI() {
         TextView currentStreakTextView = findViewById(R.id.currentStreak);
