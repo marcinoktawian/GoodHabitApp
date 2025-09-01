@@ -29,5 +29,17 @@ public interface HabitDao {
     @Query("SELECT COUNT(*) FROM habits WHERE LOWER(name) = LOWER(:name)")
     int countByName(String name);
 
+    // --- Update nazwy zwyczaju ---
+    @Query("UPDATE habits SET name = :newName WHERE id = :habitId")
+    void updateName(int habitId, String newName);
+
+    // --- Update ilości dni przerwy ---
+    @Query("UPDATE habits SET allowedSkipDays = :skipDays WHERE id = :habitId")
+    void updateAllowedSkipDays(int habitId, int skipDays);
+
+    // --- Usunięcie zwyczaju po ID ---
+    @Query("DELETE FROM habits WHERE id = :habitId")
+    void deleteHabitById(int habitId);
+
 
 }
