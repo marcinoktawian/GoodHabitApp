@@ -20,9 +20,6 @@ public interface HabitDao {
     @Delete
     void deleteHabit(Habit habit);
 
-    @Update
-    void updateHabit(Habit habit);
-
     @Query("SELECT * FROM habits WHERE id = :habitId LIMIT 1")
     Habit getHabitById(int habitId);
 
@@ -41,5 +38,10 @@ public interface HabitDao {
     @Query("DELETE FROM habits WHERE id = :habitId")
     void deleteHabitById(int habitId);
 
+    @Query("UPDATE habits SET reminderTime = :reminderTime WHERE id = :id")
+    void updateReminderTime(int id, String reminderTime);
+
+    @Query("UPDATE habits SET unlockedTrophies = :trophies WHERE id = :habitId")
+    void updateUnlockedTrophies(int habitId, String trophies);
 
 }

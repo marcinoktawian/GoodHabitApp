@@ -21,11 +21,19 @@ public class Habit {
 
     public int allowedSkipDays;
 
+    public String reminderTime; // format "HH:mm", np. "08:30"
+
+    public String unlockedTrophies; // np. "7,30,100"
+
+
+
     public Habit(@NonNull String name, long createdAt, int allowedSkipDays) {
         this.name = name;
         this.createdAt = createdAt;
         this.currentStreak = 0;
         this.maxStreak = 0;
         this.allowedSkipDays = allowedSkipDays;
+        this.reminderTime = null;
+        this.unlockedTrophies = "";
     }
 }

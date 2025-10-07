@@ -1,19 +1,33 @@
 package com.devszatops.goodhabitapp;
 
+import android.Manifest;
+import android.annotation.SuppressLint;
+import android.app.AlarmManager;
 import android.app.AlertDialog;
+import android.app.PendingIntent;
+import android.app.TaskStackBuilder;
+import android.app.TimePickerDialog;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.ShapeDrawable;
 import android.graphics.drawable.shapes.OvalShape;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.InputType;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.Gravity;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.NumberPicker;
 import android.widget.PopupMenu;
@@ -22,9 +36,13 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresPermission;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.room.Room;
 
 import com.devszatops.goodhabitapp.R;
@@ -40,6 +58,7 @@ import com.prolificinteractive.materialcalendarview.DayViewFacade;
 import com.prolificinteractive.materialcalendarview.OnDateSelectedListener;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.HashSet;
@@ -100,6 +119,10 @@ public class HabitDetailActivity extends AppCompatActivity {
                 } else if (id == R.id.menu_edit_skip_days) {
                     showEditSkipDaysDialog();
                     return true;
+                } else if (id == R.id.menu_set_reminder) {
+                    checkNotificationPermission();
+                    showTimePickerDialog();
+                    return true;
                 } else if (id == R.id.menu_delete) {
                     showDeleteHabitDialog();
                     return true;
@@ -111,6 +134,7 @@ public class HabitDetailActivity extends AppCompatActivity {
         });
 
         simulateLoadingData();
+
     }
 
     private void showEditNameDialog() {
@@ -469,10 +493,15 @@ public class HabitDetailActivity extends AppCompatActivity {
             // Używamy zmiennych finalnych do zaktualizowania UI w głównym wątku
             final int finalTempCurrentStreak = tempCurrentStreak;
             final int finalTempLongestStreak = tempLongestStreak;
+            checkForNewTrophies(finalTempCurrentStreak);
+            LinearLayout currentTrophyContainer = findViewById(R.id.currentTrophyContainer);
+            LinearLayout longestTrophyContainer = findViewById(R.id.longestTrophyContainer);
 
             // Zaktualizuj UI po zakończeniu wątku
             runOnUiThread(() -> {
                 updateStreakInUI(finalTempCurrentStreak, finalTempLongestStreak);
+                displayTrophies(finalTempCurrentStreak, currentTrophyContainer);
+                displayTrophies(finalTempLongestStreak, longestTrophyContainer);
             });
         }).start(); // Uruchamiamy wątek roboczy
     }
@@ -524,6 +553,207 @@ public class HabitDetailActivity extends AppCompatActivity {
 
         currentStreakTextView.setText("Obecny streak: " + currentStreak);
         longestStreakTextView.setText("Najdłuższy streak: " + longestStreak);
+    }
+
+    private void showTimePickerDialog() {
+        // Sprawdź uprawnienia do powiadomień
+        checkNotificationPermission();
+
+        Calendar calendar = Calendar.getInstance();
+        int hour = calendar.get(Calendar.HOUR_OF_DAY);
+        int minute = calendar.get(Calendar.MINUTE);
+
+        TimePickerDialog timePicker = new TimePickerDialog(
+                this,
+                (view, selectedHour, selectedMinute) -> {
+                    String reminderTime = String.format("%02d:%02d", selectedHour, selectedMinute);
+
+                    // Zapisz w bazie w tle
+                    new Thread(() -> {
+                        habitDao.updateReminderTime(habitId, reminderTime);
+
+                        // Ustaw alarm i pokaż Toast w głównym wątku
+                        runOnUiThread(() -> {
+                            setHabitReminder(habitId, habitName, reminderTime);
+                            Toast.makeText(this, "Przypomnienie ustawione dla zwyczaju: " + habitName, Toast.LENGTH_SHORT).show();
+                        });
+                    }).start();
+                },
+                hour,
+                minute,
+                true
+        );
+
+        timePicker.show();
+    }
+
+    @SuppressLint("ScheduleExactAlarm")
+    private void setHabitReminder(int habitId, String habitName, String reminderTime) {
+        // Sprawdzenie dokładnych alarmów (Android 12+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
+            if (!alarmManager.canScheduleExactAlarms()) {
+                Toast.makeText(this, "Włącz dokładne alarmy w ustawieniach systemu", Toast.LENGTH_LONG).show();
+                return;
+            }
+        }
+
+        String[] parts = reminderTime.split(":");
+        int hour = Integer.parseInt(parts[0]);
+        int minute = Integer.parseInt(parts[1]);
+
+        Calendar calendar = Calendar.getInstance();
+        calendar.set(Calendar.HOUR_OF_DAY, hour);
+        calendar.set(Calendar.MINUTE, minute);
+        calendar.set(Calendar.SECOND, 0);
+
+        // Jeśli wybrana godzina już minęła dzisiaj, ustaw na jutro
+        if (calendar.before(Calendar.getInstance())) {
+            calendar.add(Calendar.DAY_OF_MONTH, 1);
+        }
+
+        Intent intent = new Intent(this, ReminderReceiver.class);
+        intent.putExtra("habitId", habitId);
+        intent.putExtra("habitName", habitName);
+
+        TaskStackBuilder stackBuilder = TaskStackBuilder.create(this);
+        stackBuilder.addParentStack(HabitDetailActivity.class); // dodaje MainActivity jako parent
+        stackBuilder.addNextIntent(intent);
+
+
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                this,
+                habitId,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
+        if (alarmManager != null) {
+            alarmManager.setRepeating(
+                    AlarmManager.RTC_WAKEUP,
+                    calendar.getTimeInMillis(),
+                    AlarmManager.INTERVAL_DAY,
+                    pendingIntent
+            );
+        }
+    }
+
+    private void checkNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) { // Android 13+
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                        1001); // dowolny requestCode
+            }
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 1001) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Zezwolenie na powiadomienia przyznane", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Brak zezwolenia na powiadomienia", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    private void displayTrophies(int streakValue, LinearLayout container) {
+        container.removeAllViews();
+
+        int[] thresholds = {7, 30, 100, 200, 365, 730, 1000};
+        int[] icons = {
+                R.drawable.trophy_bronze,
+                R.drawable.trophy_silver,
+                R.drawable.trophy_gold,
+                R.drawable.trophy_platinum,
+                R.drawable.trophy_diamond,
+                R.drawable.trophy_master,
+                R.drawable.trophy_legend
+        };
+
+        for (int i = 0; i < thresholds.length; i++) {
+            if (streakValue >= thresholds[i]) {
+                ImageView trophy = new ImageView(this);
+                trophy.setImageResource(icons[i]);
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(100, 100);
+                params.setMargins(8, 0, 8, 0);
+                trophy.setLayoutParams(params);
+                container.addView(trophy);
+            }
+        }
+
+        if (container.getChildCount() == 0) {
+            TextView noTrophyText = new TextView(this);
+            noTrophyText.setText("Brak trofeów — pracuj dalej!");
+            noTrophyText.setTextColor(Color.GRAY);
+            noTrophyText.setTextSize(14);
+            container.addView(noTrophyText);
+        }
+    }
+
+    private void checkForNewTrophies(int streak) {
+        // Przykładowe progi
+        int[] trophyThresholds = {7, 30, 100, 200, 365, 500, 1000};
+        int[] trophyIcons = {
+                R.drawable.trophy_bronze,
+                R.drawable.trophy_silver,
+                R.drawable.trophy_gold,
+                R.drawable.trophy_platinum,
+                R.drawable.trophy_diamond,
+                R.drawable.trophy_master,
+                R.drawable.trophy_legend
+        };
+
+        new Thread(() -> {
+            Habit habit = habitDao.getHabitById(habitId);
+            if (habit == null) return;
+
+            String unlocked = habit.unlockedTrophies == null ? "" : habit.unlockedTrophies;
+            List<String> unlockedList = new ArrayList<>(Arrays.asList(unlocked.split(",")));
+
+            for (int i = 0; i < trophyThresholds.length; i++) {
+                int threshold = trophyThresholds[i];
+                if (streak >= threshold && !unlockedList.contains(String.valueOf(threshold))) {
+                    unlockedList.add(String.valueOf(threshold));
+
+                    String updated = TextUtils.join(",", unlockedList);
+                    habitDao.updateUnlockedTrophies(habitId, updated);
+
+                    int trophyRes = trophyIcons[i];
+
+                    runOnUiThread(() -> showTrophyUnlockedDialog(threshold, trophyRes));
+                    break; // pokazujemy tylko jedno nowe trofeum na raz
+                }
+            }
+        }).start();
+    }
+
+    private void showTrophyUnlockedDialog(int streak, int trophyResId) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        LayoutInflater inflater = getLayoutInflater();
+        View dialogView = inflater.inflate(R.layout.dialog_trophy_unlocked, null);
+        builder.setView(dialogView);
+
+        ImageView trophyImage = dialogView.findViewById(R.id.trophyImage);
+        TextView title = dialogView.findViewById(R.id.trophyTitle);
+        TextView message = dialogView.findViewById(R.id.trophyMessage);
+
+        trophyImage.setImageResource(trophyResId);
+        title.setText("🎉 Gratulacje!");
+        message.setText("Wykonujesz ten zwyczaj od " + streak + " dni!\nNowe trofeum zdobyte 🏆");
+
+        AlertDialog dialog = builder.create();
+        dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        dialog.show();
+
+        // automatycznie zamknij po 3 sekundach
+        new Handler(Looper.getMainLooper()).postDelayed(dialog::dismiss, 5000);
     }
 
 

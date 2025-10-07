@@ -12,6 +12,11 @@
         android:icon="@android:drawable/ic_menu_today" />
 
     <item
+        android:id="@+id/menu_set_reminder"
+        android:title="Ustaw przypomnienie"
+        android:icon="@android:drawable/ic_menu_recent_history" />
+
+    <item
         android:id="@+id/menu_delete"
         android:title="Usuń zwyczaj"
         android:icon="@android:drawable/ic_menu_delete" />

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@android:color/white"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center">
+
+    <ImageView
+        android:id="@+id/trophyImage"
+        android:layout_width="96dp"
+        android:layout_height="96dp"
+        android:src="@drawable/trophy_gold"
+        android:contentDescription="Trophy"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:id="@+id/trophyTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Gratulacje!"
+        android:textStyle="bold"
+        android:textSize="22sp"
+        android:textColor="#4CAF50"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/trophyMessage"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Wykonujesz zwyczaj od 7 dni!"
+        android:textColor="#333333"
+        android:textSize="16sp"
+        android:gravity="center" />
+
+</LinearLayout>
