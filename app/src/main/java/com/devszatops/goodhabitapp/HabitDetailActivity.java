@@ -4,20 +4,19 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.AlarmManager;
 import android.app.AlertDialog;
+import android.app.DatePickerDialog;
 import android.app.PendingIntent;
 import android.app.TaskStackBuilder;
 import android.app.TimePickerDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
-import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.ShapeDrawable;
 import android.graphics.drawable.shapes.OvalShape;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.text.InputType;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Gravity;
@@ -29,7 +28,6 @@ import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.NumberPicker;
 import android.widget.PopupMenu;
 import android.widget.ProgressBar;
 import android.widget.Spinner;
@@ -38,14 +36,12 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.annotation.RequiresPermission;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.room.Room;
 
-import com.devszatops.goodhabitapp.R;
 import com.devszatops.goodhabitapp.data.AppDatabase;
 import com.devszatops.goodhabitapp.data.Habit;
 import com.devszatops.goodhabitapp.data.HabitDao;
@@ -55,7 +51,6 @@ import com.prolificinteractive.materialcalendarview.MaterialCalendarView;
 import com.prolificinteractive.materialcalendarview.CalendarDay;
 import com.prolificinteractive.materialcalendarview.DayViewDecorator;
 import com.prolificinteractive.materialcalendarview.DayViewFacade;
-import com.prolificinteractive.materialcalendarview.OnDateSelectedListener;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -212,7 +207,6 @@ public class HabitDetailActivity extends AppCompatActivity {
     }
 
 
-
     private void showDeleteHabitDialog() {
         new AlertDialog.Builder(this)
                 .setTitle("Usuń zwyczaj")
@@ -227,8 +221,6 @@ public class HabitDetailActivity extends AppCompatActivity {
                 .setNegativeButton("Anuluj", null)
                 .show();
     }
-
-
 
 
     private void simulateLoadingData() {
@@ -315,87 +307,213 @@ public class HabitDetailActivity extends AppCompatActivity {
                                 }).start();
                             })
                             .setNegativeButton("Nie", null)
+                            .setNeutralButton("Zacznij przerwę", (dialog, which) -> showBreakPicker(year, month, day))
                             .show();
                 }
             });
         }).start();
     }
 
+    private void showBreakPicker(int year, int month, int day) {
+        new Thread(() -> {
+            HabitLog earliestLog = habitLogDao.getEarliestNonBreakLog(habitId);
+
+            runOnUiThread(() -> {
+                if (earliestLog == null) {
+                    Toast.makeText(this, "Nie możesz rozpocząć przerwy przed pierwszym wykonaniem nawyku!", Toast.LENGTH_LONG).show();
+                    return;
+                }
+
+                // Zamieniamy datę pierwszego wpisu na Calendar
+                Calendar firstLogDate = stringToCalendar(earliestLog.date);
+
+                // Kliknięta data (np. z kalendarza)
+                Calendar clickedDate = Calendar.getInstance();
+                clickedDate.set(year, month - 1, day);
+
+                // 🧠 Sprawdzamy, czy kliknięty dzień nie jest wcześniejszy niż pierwszy log
+                if (clickedDate.before(firstLogDate)) {
+                    Toast.makeText(this,
+                            "Nie możesz rozpocząć przerwy przed pierwszym wykonaniem nawyku (" +
+                                    new java.text.SimpleDateFormat("dd.MM.yyyy").format(firstLogDate.getTime()) + ")!",
+                            Toast.LENGTH_LONG
+                    ).show();
+                    return;
+                }
+
+                // 🔹 Jeśli wszystko OK – pokaż DatePicker startowy
+                DatePickerDialog startPicker = new DatePickerDialog(
+                        this,
+                        (view, startYear, startMonth, startDayOfMonth) -> {
+                            Calendar startDate = Calendar.getInstance();
+                            startDate.set(startYear, startMonth, startDayOfMonth);
+
+                            // 🧠 Zabezpieczenie: start przerwy nie może być przed pierwszym logiem
+                            if (startDate.before(firstLogDate)) {
+                                Toast.makeText(this,
+                                        "Początek przerwy nie może być przed pierwszym wykonaniem nawyku!",
+                                        Toast.LENGTH_SHORT
+                                ).show();
+                                return;
+                            }
+
+                            // Po wybraniu startu – wybór daty zakończenia
+                            DatePickerDialog endPicker = new DatePickerDialog(
+                                    this,
+                                    (view2, endYear, endMonth, endDay) -> {
+                                        Calendar endDate = Calendar.getInstance();
+                                        endDate.set(endYear, endMonth, endDay);
+
+                                        if (endDate.before(startDate)) {
+                                            Toast.makeText(this, "Data zakończenia nie może być przed rozpoczęciem", Toast.LENGTH_SHORT).show();
+                                            return;
+                                        }
+
+                                        saveBreakDays(startDate, endDate);
+                                    },
+                                    startYear,
+                                    startMonth,
+                                    startDayOfMonth
+                            );
+
+                            // 🔹 kalendarz od poniedziałku, minimalna data = start przerwy
+                            endPicker.getDatePicker().setFirstDayOfWeek(Calendar.MONDAY);
+                            endPicker.getDatePicker().setMinDate(startDate.getTimeInMillis());
+                            endPicker.setTitle("Wybierz datę zakończenia przerwy");
+                            endPicker.show();
+                        },
+                        clickedDate.get(Calendar.YEAR),
+                        clickedDate.get(Calendar.MONTH),
+                        clickedDate.get(Calendar.DAY_OF_MONTH)
+                );
+
+                startPicker.getDatePicker().setFirstDayOfWeek(Calendar.MONDAY);
+                startPicker.getDatePicker().setMinDate(firstLogDate.getTimeInMillis()); // 🔒 nie można wybrać wcześniejszej daty
+                startPicker.setTitle("Wybierz datę rozpoczęcia przerwy");
+                startPicker.show();
+            });
+        }).start();
+    }
+
+
+    private void saveBreakDays(Calendar startDate, Calendar endDate) {
+        new Thread(() -> {
+            Calendar day = (Calendar) startDate.clone();
+
+            while (!day.after(endDate)) {
+                String dateStr = String.format("%04d-%02d-%02d",
+                        day.get(Calendar.YEAR),
+                        day.get(Calendar.MONTH) + 1,
+                        day.get(Calendar.DAY_OF_MONTH));
+
+                HabitLog breakLog = new HabitLog();
+                breakLog.habitId = habitId;
+                breakLog.date = dateStr;
+                breakLog.isBreak = true;
+
+                habitLogDao.insertLog(breakLog);
+
+                day.add(Calendar.DATE, 1); // przechodzimy do następnego dnia
+            }
+
+            runOnUiThread(() -> {
+                highlightSampleDates();
+                calculateStreaks();
+                Toast.makeText(this, "Przerwa zapisana!", Toast.LENGTH_SHORT).show();
+            });
+        }).start();
+
+    }
+
 
     private void highlightSampleDates() {
         List<CalendarDay> completedDays = new ArrayList<>();
         List<CalendarDay> missedDays = new ArrayList<>();
+        List<CalendarDay> breakDays = new ArrayList<>();
 
-        // Operacje na bazie danych muszą odbywać się w osobnym wątku
         new Thread(() -> {
-            List<HabitLog> logs = habitLogDao.getLogsForHabit(habitId); // Pobierz dane z bazy
-            Log.d("HabitDetailActivity", "Pobrano logi: " + logs.size()); // Logowanie liczby logów
+            List<HabitLog> logs = habitLogDao.getLogsForHabit(habitId);
 
             if (logs.isEmpty()) {
-                // Jeśli brak logów, zakończ
-                Log.d("HabitDetailActivity", "Brak logów w bazie");
+                runOnUiThread(() -> calendarView.removeDecorators());
                 return;
             }
 
-            // Znajdź datę pierwszego wpisu
-            String firstDateStr = logs.get(logs.size() - 1).date; // Pierwszy wpis to ostatni w bazie (posortowane malejąco)
-            Log.d("HabitDetailActivity", "Pierwszy wpis data: " + firstDateStr); // Logowanie daty pierwszego wpisu
+            // Sortujemy logi po dacie (rosnąco)
+            logs.sort((a, b) -> a.date.compareTo(b.date));
 
-            Calendar firstDate = stringToCalendar(firstDateStr);
-
-            // Pobierz dzisiejszą datę
+            Calendar firstDate = stringToCalendar(logs.get(0).date);
             Calendar today = Calendar.getInstance();
 
-            // Dodaj dni wykonane do completedDays
+            HashSet<String> logDatesSet = new HashSet<>();
+
             for (HabitLog log : logs) {
                 Calendar logDate = stringToCalendar(log.date);
-                completedDays.add(CalendarDay.from(logDate.get(Calendar.YEAR), logDate.get(Calendar.MONTH) + 1, logDate.get(Calendar.DAY_OF_MONTH)));
-                Log.d("HabitDetailActivity", "Dodano completedDay: " + log.date); // Logowanie dodanych dni
-            }
 
-            // Sprawdzamy wszystkie dni pomiędzy pierwszym wpisem a dzisiaj
-            for (Calendar day = (Calendar) firstDate.clone(); !day.after(today); day.add(Calendar.DATE, 1)) {
-                CalendarDay calendarDay = CalendarDay.from(day.get(Calendar.YEAR), day.get(Calendar.MONTH) + 1, day.get(Calendar.DAY_OF_MONTH));
+                // UWAGA: Calendar.MONTH jest 0-indexowane, więc dodajemy +1 tylko TUTAJ
+                CalendarDay day = CalendarDay.from(
+                        logDate.get(Calendar.YEAR),
+                        logDate.get(Calendar.MONTH) + 1, // <- +1 bo MaterialCalendarView używa 1-12
+                        logDate.get(Calendar.DAY_OF_MONTH)
+                );
 
-                // Jeśli brak wpisu na dany dzień, oznacz jako missedDay
-                if (!completedDays.contains(calendarDay)) {
-                    missedDays.add(calendarDay);
-                    Log.d("HabitDetailActivity", "Dodano missedDay: " + calendarDay); // Logowanie dodanych missedDays
+                logDatesSet.add(log.date);
+
+                if (log.isBreak) {
+                    breakDays.add(day);
+                } else {
+                    completedDays.add(day);
                 }
             }
 
-            // Logowanie przed wyświetleniem
-            Log.d("HabitDetailActivity", "Completed days count: " + completedDays.size());
-            Log.d("HabitDetailActivity", "Missed days count: " + missedDays.size());
+            // Szukamy brakujących dni między pierwszym logiem a dzisiaj (dni pominięte)
+            for (Calendar day = (Calendar) firstDate.clone(); !day.after(today); day.add(Calendar.DATE, 1)) {
+                String dayStr = String.format("%04d-%02d-%02d",
+                        day.get(Calendar.YEAR),
+                        day.get(Calendar.MONTH) + 1, // miesiąc 1-12
+                        day.get(Calendar.DAY_OF_MONTH));
 
-            // Zaktualizuj UI po zakończeniu operacji na bazie
+                if (!logDatesSet.contains(dayStr)) {
+                    CalendarDay missed = CalendarDay.from(
+                            day.get(Calendar.YEAR),
+                            day.get(Calendar.MONTH) + 1,
+                            day.get(Calendar.DAY_OF_MONTH)
+                    );
+                    missedDays.add(missed);
+                }
+            }
+
+            // Aktualizacja UI na głównym wątku
             runOnUiThread(() -> {
-                calendarView.removeDecorators(); // Usuwamy stare dekoratory
-                // Zielony, stonowany kolor dla dni wykonanych
-                int stonowanyZielony = Color.parseColor("#388E3C");
-                calendarView.addDecorator(new DayColorDecorator(completedDays, stonowanyZielony));
-                // Czerwony kolor dla dni, które nie zostały wykonane
-                int stonowanyCzerwony = Color.parseColor("#D32F2F");
-                calendarView.addDecorator(new DayColorDecorator(missedDays, stonowanyCzerwony));
+                calendarView.removeDecorators();
+
+                int greenColor = Color.parseColor("#388E3C"); // wykonane
+                int redColor = Color.parseColor("#D32F2F");   // pominięte
+                int blueColor = Color.parseColor("#1976D2");  // przerwa
+
+                calendarView.addDecorator(new DayColorDecorator(completedDays, greenColor));
+                calendarView.addDecorator(new DayColorDecorator(missedDays, redColor));
+                calendarView.addDecorator(new DayColorDecorator(breakDays, blueColor));
+
                 updateUI();
             });
-        }).start(); // Uruchamiamy wątek roboczy
+
+        }).start();
     }
 
 
-    private Calendar stringToCalendar(String dateStr) {
-        String[] dateParts = dateStr.split("-");
-        int year = Integer.parseInt(dateParts[0]);
-        int month = Integer.parseInt(dateParts[1]) - 1;  // Miesiące są 0-indexed, więc odejmujemy 1
-        int day = Integer.parseInt(dateParts[2]);
+    private Calendar stringToCalendar(String dateString) {
+        String[] parts = dateString.split("-");
+        int year = Integer.parseInt(parts[0]);
+        int month = Integer.parseInt(parts[1]) - 1; // <- Calendar miesiące liczy od 0
+        int day = Integer.parseInt(parts[2]);
 
-        Calendar calendar = Calendar.getInstance();
-        calendar.set(year, month, day);
-
-        Log.d("HabitDetailActivity", "Date parsed: " + calendar.getTime()); // Debugging log for the parsed date
-
-        return calendar;
+        Calendar cal = Calendar.getInstance();
+        cal.set(year, month, day, 0, 0, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        return cal;
     }
+
 
     public class DayColorDecorator implements DayViewDecorator {
         private final HashSet<CalendarDay> dates;
@@ -431,14 +549,20 @@ public class HabitDetailActivity extends AppCompatActivity {
 
             int allowedSkipDays = getHabitAllowedSkipDays();  // Pobierz liczbę dozwolonych dni przerwy
             List<Calendar> completeDays = new ArrayList<>();
+            List<Calendar> breakDays = new ArrayList<>();
 
             // Zamiana logów na listę dat
             for (HabitLog log : logs) {
-                completeDays.add(stringToCalendar(log.date));
+                if (!log.isBreak) {
+                    completeDays.add(stringToCalendar(log.date));
+                } else {
+                    breakDays.add(stringToCalendar(log.date));
+                }
             }
 
             // Sortujemy daty w porządku rosnącym (od najstarszego do najnowszego)
             completeDays.sort(Calendar::compareTo);
+            breakDays.sort(Calendar::compareTo);
 
             // Zmienna na przechowanie obecnego streaku
             int tempCurrentStreak = 0;
@@ -450,12 +574,12 @@ public class HabitDetailActivity extends AppCompatActivity {
 
             if (completeDays.isEmpty()) {
                 Log.d("HabitDetailActivity", "Brak logów w bazie. Streak ustawiony na 0.");
-                tempPotentialLongestStreak =0;
-            }else {
+                tempPotentialLongestStreak = 0;
+            } else {
                 // Sprawdzamy ostatni wpis (czy dzisiejszy dzień jest częścią streaku)
-                if (!compareDates(today, completeDays.get(completeDays.size() - 1), allowedSkipDays-1)) {
+                if (!compareDates(today, completeDays.get(completeDays.size() - 1), allowedSkipDays - 1)) {
                     currentStreak = false;  // Jeśli dzisiejszy dzień nie jest częścią streaku
-                }else{
+                } else {
                     tempCurrentStreak++;
                 }
 
@@ -464,24 +588,49 @@ public class HabitDetailActivity extends AppCompatActivity {
                     Calendar currentDay = completeDays.get(i);
                     Calendar previousDay = completeDays.get(i - 1);
 
-                    // Sprawdzamy, czy różnica między datami nie przekroczyła dozwolonej przerwy
+                    // Normalny przypadek — różnica w granicach allowSkipDays
                     if (compareDates(currentDay, previousDay, allowedSkipDays)) {
-                        tempPotentialLongestStreak++;  // Zwiększamy potencjalny streak
-
-                        if (currentStreak) {
-                            tempCurrentStreak++;  // Zwiększamy aktualny streak
-                        }
-                    } else {
-                        // Jeśli przerwa jest za długa, resetujemy streak
-                        currentStreak = false;
-
-                        // Aktualizujemy najdłuższy streak, jeśli to konieczne
-                        if (tempPotentialLongestStreak > tempLongestStreak) {
-                            tempLongestStreak = tempPotentialLongestStreak;
-                        }
-                        // Resetujemy potencjalny streak
-                        tempPotentialLongestStreak = 1;
+                        tempPotentialLongestStreak++;
+                        if (currentStreak) tempCurrentStreak++;
+                        continue;
                     }
+
+                    // Sprawdzamy, czy w luce była przerwa
+                    boolean wasBreakInGap = false;
+                    Calendar breakEnd = null;
+                    Calendar breakStart = null;
+
+                    for (Calendar breakDay : breakDays) {
+                        if (isBetween(previousDay, currentDay, breakDay)) {
+                            if (breakStart == null){
+                                breakStart = (Calendar) breakDay.clone();
+                                wasBreakInGap = true;
+                            }
+                            if (breakEnd == null || breakDay.after(breakEnd)) {
+                                breakEnd = (Calendar) breakDay.clone();
+                            }
+                        }
+                    }
+
+                    if (wasBreakInGap ) {
+                        // 🔹 Obliczamy różnicę między końcem przerwy a następnym wykonanym dniem
+                        long diffDays = daysBetween(breakStart, previousDay) + daysBetween(currentDay, breakEnd) - 2;
+
+                        if (diffDays <= allowedSkipDays) {
+                            // ✅ Zalicza się do streaka, bo wrócono w czasie dozwolonej przerwy
+                            tempPotentialLongestStreak++;
+                            if (currentStreak) tempCurrentStreak++;
+                            continue;
+                        }
+                    }
+
+                    // 🔴 W przeciwnym razie — streak się kończy
+                    currentStreak = false;
+
+                    if (tempPotentialLongestStreak > tempLongestStreak) {
+                        tempLongestStreak = tempPotentialLongestStreak;
+                    }
+                    tempPotentialLongestStreak = 1;
                 }
             }
 
@@ -506,30 +655,33 @@ public class HabitDetailActivity extends AppCompatActivity {
         }).start(); // Uruchamiamy wątek roboczy
     }
 
-    // Funkcja do porównania dat
-    private boolean compareDates(Calendar newerDate, Calendar olderDate, int breakTimeInDays) {
-        // Ustawiamy godziny, minuty, sekundy i milisekundy na 00:00:00 dla obu dat
-        newerDate.set(Calendar.HOUR_OF_DAY, 0);
-        newerDate.set(Calendar.MINUTE, 0);
-        newerDate.set(Calendar.SECOND, 0);
-        newerDate.set(Calendar.MILLISECOND, 0);
-
-        olderDate.set(Calendar.HOUR_OF_DAY, 0);
-        olderDate.set(Calendar.MINUTE, 0);
-        olderDate.set(Calendar.SECOND, 0);
-        olderDate.set(Calendar.MILLISECOND, 0);
-        breakTimeInDays++;
-
-        // Obliczamy różnicę w milisekundach
-        long diffInMillis = newerDate.getTimeInMillis() - olderDate.getTimeInMillis();
-
-        // Konwertujemy różnicę na dni
-        long diffInDays = diffInMillis / (1000 * 60 * 60 * 24);  // Przekształcamy na dni
-
-        return diffInDays <= breakTimeInDays;  // Jeśli różnica nie przekracza dozwolonej przerwy
+    private boolean isBetween(Calendar start, Calendar end, Calendar target) {
+        return !target.before(start) && !target.after(end);
     }
 
+    private long daysBetween(Calendar start, Calendar end) {
+        // Ustawiamy godziny, minuty, sekundy i milisekundy na 00:00:00 dla obu dat
+        start.set(Calendar.HOUR_OF_DAY, 0);
+        start.set(Calendar.MINUTE, 0);
+        start.set(Calendar.SECOND, 0);
+        start.set(Calendar.MILLISECOND, 0);
 
+        end.set(Calendar.HOUR_OF_DAY, 0);
+        end.set(Calendar.MINUTE, 0);
+        end.set(Calendar.SECOND, 0);
+        end.set(Calendar.MILLISECOND, 0);
+
+        // Obliczamy różnicę w milisekundach
+        long diffInMillis = start.getTimeInMillis() - end.getTimeInMillis();
+        return diffInMillis / (1000 * 60 * 60 * 24);
+    }
+
+    // Funkcja do porównania dat
+    private boolean compareDates(Calendar newerDate, Calendar olderDate, int breakTimeInDays) {
+        long diffInDays = daysBetween(newerDate, olderDate);
+        breakTimeInDays++;
+        return diffInDays <= breakTimeInDays;  // Jeśli różnica nie przekracza dozwolonej przerwy
+    }
 
 
     // Nowa metoda aktualizacji UI

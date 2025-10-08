@@ -27,4 +27,7 @@ public interface HabitLogDao {
     // Aktualizuje wpis na dany dzień, ustawiając lub usuwając przerwę
     @Query("UPDATE HabitLog SET isBreak = :isBreak WHERE habitId = :habitId AND date = :date")
     void setBreakForDate(int habitId, String date, boolean isBreak);
+
+    @Query("SELECT * FROM HabitLog WHERE habitId = :habitId AND isBreak = 0 ORDER BY date ASC LIMIT 1")
+    HabitLog getEarliestNonBreakLog(int habitId);
 }
