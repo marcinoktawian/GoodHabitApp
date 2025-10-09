@@ -2,16 +2,37 @@ package com.devszatops.goodhabitapp;
 
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.InputType;
+import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.*;
+
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
+import androidx.core.content.ContextCompat;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.room.Room;
+
+import android.os.Bundle;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
+
+import android.view.Window;
+import android.view.WindowInsetsController;
 
 import com.devszatops.goodhabitapp.data.AppDatabase;
 import com.devszatops.goodhabitapp.data.Habit;
 import com.google.android.material.card.MaterialCardView;
+
 import android.graphics.Color;
 import android.view.Gravity;
 import android.view.ViewGroup.LayoutParams;
@@ -29,9 +50,24 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        habitList = findViewById(R.id.habitList);
 
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+
+        setContentView(R.layout.activity_main);
+
+        // kolor status bara i tło okna
+        getWindow().setStatusBarColor(ContextCompat.getColor(this, R.color.primary_dark_green));
+        getWindow().setBackgroundDrawableResource(R.color.primary_dark_green);
+
+        // padding dla status bar + navigation bar
+        View rootView = findViewById(R.id.rootLayout);
+        ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, insets) -> {
+            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            v.setPadding(0, systemBars.top, 0, systemBars.bottom);
+            return insets;
+        });
+
+        habitList = findViewById(R.id.habitList);
         db = Room.databaseBuilder(getApplicationContext(),
                         AppDatabase.class, "habit-db")
                 .fallbackToDestructiveMigration()

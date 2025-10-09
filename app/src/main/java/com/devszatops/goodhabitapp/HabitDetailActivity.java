@@ -22,6 +22,8 @@ import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -40,6 +42,11 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.room.Room;
 
 import com.devszatops.goodhabitapp.data.AppDatabase;
@@ -79,6 +86,21 @@ public class HabitDetailActivity extends AppCompatActivity {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
         setContentView(R.layout.activity_habit_detail);
 
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+
+        // kolor status bara i tło okna
+        getWindow().setStatusBarColor(ContextCompat.getColor(this, R.color.primary_dark_green));
+        getWindow().setBackgroundDrawableResource(R.color.primary_dark_green);
+
+        // padding dla status bar + navigation bar
+        View rootView = findViewById(R.id.rootHabitLayout);
+        ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, insets) -> {
+            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            v.setPadding(0, systemBars.top, 0, systemBars.bottom);
+            return insets;
+        });
+
+
         habitName = getIntent().getStringExtra("habitName");
         habitId = getIntent().getIntExtra("habitId", -1);
 
@@ -86,6 +108,7 @@ public class HabitDetailActivity extends AppCompatActivity {
         calendarView = findViewById(R.id.calendarView);
         contentLayout = findViewById(R.id.contentLayout);
         progressBar = findViewById(R.id.progressBar);
+
 
         // Inicjalizacja bazy danych
         db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "habit-db")
@@ -431,11 +454,19 @@ public class HabitDetailActivity extends AppCompatActivity {
         List<CalendarDay> missedDays = new ArrayList<>();
         List<CalendarDay> breakDays = new ArrayList<>();
 
+        List<CalendarDay> todayDays = new ArrayList<>();
+        todayDays.add(CalendarDay.today());
+        int greyColor = Color.parseColor("#808080");  // dzisiaj
+
+
         new Thread(() -> {
             List<HabitLog> logs = habitLogDao.getLogsForHabit(habitId);
 
             if (logs.isEmpty()) {
-                runOnUiThread(() -> calendarView.removeDecorators());
+                runOnUiThread(() -> {
+                    calendarView.removeDecorators();
+                    calendarView.addDecorator(new DayColorDecorator(todayDays, greyColor));
+                });
                 return;
             }
 
@@ -491,9 +522,11 @@ public class HabitDetailActivity extends AppCompatActivity {
                 int redColor = Color.parseColor("#D32F2F");   // pominięte
                 int blueColor = Color.parseColor("#1976D2");  // przerwa
 
-                calendarView.addDecorator(new DayColorDecorator(completedDays, greenColor));
                 calendarView.addDecorator(new DayColorDecorator(missedDays, redColor));
+                calendarView.addDecorator(new DayColorDecorator(todayDays, greyColor));
+                calendarView.addDecorator(new DayColorDecorator(completedDays, greenColor));
                 calendarView.addDecorator(new DayColorDecorator(breakDays, blueColor));
+
 
                 updateUI();
             });
